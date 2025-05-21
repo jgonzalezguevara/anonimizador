@@ -12,15 +12,27 @@ from odf.text import P
 def anonimizar_texto(texto, palabras):
     patrones = [
         r'\b\d{8}[A-Za-z]\b',  # DNI
-        r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}\b',  # Correo
+        r'\b[A-Z]\d{8}\b',  # CIF
+        r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}\b',  # Email
         r'\+?\d{2,3}[ -]?\d{3}[ -]?\d{3}[ -]?\d{3}',  # Teléfono
+        r'\b\d{5}\b',  # Código Postal
+        r'Expediente\s*[:\s]?\s*[A-Za-z0-9./-]+',  # Expedientes
+        r'\d{4}-\d{2}-\d{2}',  # Fecha ISO
+        r'\d{1,2}\s+de\s+\w+\s+de\s+\d{4}',  # Fecha larga
+        r'\bES\d{3}\b',  # Código NUTS
+        r'\b\d{8}\b',  # Código CPV
+        r'Sor Ángela de la Cruz,\s*\d+',  # Dirección específica
+        r'ID:\s*\d+-\d+',  # Códigos ID
     ]
+
     for patron in patrones:
         texto = re.sub(patron, '***', texto, flags=re.IGNORECASE)
 
     for palabra in palabras:
         texto = re.sub(re.escape(palabra), '***', texto, flags=re.IGNORECASE)
+
     return texto
+
 
 def cargar_lista_anonimizables():
     try:
