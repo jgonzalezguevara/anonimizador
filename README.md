@@ -72,11 +72,3 @@ NIF12345678
 Jose González Ladrón de Guevara
 github.com/jgonzalezguevara
 
-
-
-📤 Subir al repositorio
-
-git add .
-git commit -m "El texto que quieras"
-git push
-
