@@ -1,3 +1,11 @@
-Jose González
-Ferrol
-MiEmpresa
+# Añade aquí nombres, ubicaciones o palabras clave a anonimizar manualmente.
+# Una palabra o frase por línea. No uses comillas.
+
+Juan Pérez
+Madrid
+Empresa S.A.
+Calle Falsa 123
+ejemplo@correo.com
+Departamento Legal
+NIF12345678
+
