@@ -6,93 +6,117 @@ import re
 import fitz  # PyMuPDF
 from docx import Document
 from openpyxl import load_workbook
-import csv
-from odf.opendocument import load as odf_load
-from odf.text import P
 
-def anonimizar_texto(texto, palabras):
-    patrones = [
-        r'\b\d{8}[A-Za-z]\b',  # DNI
-        r'\b[A-Z]\d{8}\b',  # CIF
-        r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}\b',  # Email
-        r'\+?\d{2,3}[ -]?\d{3}[ -]?\d{3}[ -]?\d{3}',  # Teléfono
-        r'\b\d{5}\b',  # Código Postal
-        r'Expediente\s*[:\s]?\s*[A-Za-z0-9./-]+',  # Expedientes
-        r'\d{4}-\d{2}-\d{2}',  # Fecha ISO
-        r'\d{1,2}\s+de\s+\w+\s+de\s+\d{4}',  # Fecha larga
-        r'\bES\d{3}\b',  # Código NUTS
-        r'\b\d{8}\b',  # Código CPV
-        r'Sor Ángela de la Cruz,\s*\d+',  # Dirección específica
-        r'ID:\s*\d+-\d+',  # Códigos ID
-    ]
+# Diccionario de patrones genéricos activables desde anonimizables.txt
+PATRONES_GENERICOS = {
+    "EMAIL": r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}\b",
+    "URL": r"https?://\S+",
+    "WEB": r"www\.[a-zA-Z0-9.-]+\.[a-z]{2,}",
+    "DNI": r"\b\d{8}[A-Za-z]\b",
+    "NIF": r"\b[A-Z]\d{8}\b",
+    "CIF": r"\b[A-Z]\d{8}\b",
+    "VALOR_ECONÓMICO": r"\d{1,3}(\.\d{3})*(,\d{2})?\s?(euros|EUR|€)?",
+    "CÓDIGO_NUTS": r"\bES\d{3}\b",
+    "CÓDIGO_CPV": r"\b\d{8}\b",
+    "NOMBRE_PERSONA": r"[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+",
+    "DIRECCIÓN": r"(?i)(Calle|C/|Avenida|Av\.|Plaza|Pza\.)\s+[\w\s]+,?\s*\d+",
+    "DOMINIO_INSTITUCIONAL": r"(?i)\b(adif|boe|contrataciondelestado)\.es\b",
+    "NUMERO_IDENTIFICACION": r"\bQ\d{7}[A-Z]\b",
+    "CORREO_ELECTRÓNICO": r"(?i)(Correo electrónico|Email):?\s*[^\s]+@[^\s]+",
+    "VALOR_ESTIMADO": r"(?i)Valor estimado:?\s*\d{1,3}(\.\d{3})*(,\d{2})?\s?(euros|EUR|€)?",
+    "PERFIL_COMPRADOR": r"(?i)perfil de comprador[:\s]+.*",
+    "DIRECCIÓN_PRINCIPAL": r"(?i)dirección principal[:\s]+.*",
+    "PORTAL_CONTRATACIÓN": r"(?i)contrataciondelestado\.es"
+}
 
-    for patron in patrones:
-        texto = re.sub(patron, '***', texto, flags=re.IGNORECASE)
 
-    for palabra in palabras:
-        texto = re.sub(re.escape(palabra), '***', texto, flags=re.IGNORECASE)
-
+def anonimizar_texto(texto, claves_activas):
+    for clave in claves_activas:
+        patron = PATRONES_GENERICOS.get(clave)
+        if patron:
+            texto = re.sub(patron, '***', texto, flags=re.IGNORECASE)
     return texto
 
 
-def cargar_lista_anonimizables():
+def cargar_claves_anonimizables():
     try:
         with open("anonimizables.txt", "r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
+            claves = [line.strip().upper() for line in f if line.strip() and not line.startswith('#')]
+            return claves
     except FileNotFoundError:
+        messagebox.showwarning("Aviso", "No se encontró 'anonimizables.txt'. Se anonimizarán solo patrones genéricos.")
         return []
+
 
 def obtener_ruta_salida(filepath, output_dir):
     nombre_archivo = os.path.basename(filepath)
     nombre, extension = os.path.splitext(nombre_archivo)
     return os.path.join(output_dir, f"{nombre}_anonimizado{extension}")
 
-def anonimizar_docx(filepath, palabras, output_dir):
-    doc = Document(filepath)
-    for p in doc.paragraphs:
-        p.text = anonimizar_texto(p.text, palabras)
-    doc.save(obtener_ruta_salida(filepath, output_dir))
 
-def anonimizar_xlsx(filepath, palabras, output_dir):
+def anonimizar_docx(filepath, claves, output_dir):
+    doc = Document(filepath)
+    for para in doc.paragraphs:
+        texto_completo = "".join(run.text for run in para.runs)
+        texto_anon = anonimizar_texto(texto_completo, claves)
+        if texto_completo != texto_anon:
+            for run in para.runs:
+                run.text = ""
+            if para.runs:
+                para.runs[0].text = texto_anon
+
+    if "ELIMINAR_IMAGENES" in claves:
+        for shape in doc.inline_shapes:
+            shape._inline.graphic.graphicData._element.clear()
+
+    doc.save(obtener_ruta_salida(filepath, output_dir))
+    print(f"[DOCX] Anonimizado: {os.path.basename(filepath)}")
+
+
+def anonimizar_xlsx(filepath, claves, output_dir):
     wb = load_workbook(filepath)
     for sheet in wb.worksheets:
         for row in sheet.iter_rows():
             for cell in row:
                 if isinstance(cell.value, str):
-                    cell.value = anonimizar_texto(cell.value, palabras)
+                    texto_anon = anonimizar_texto(cell.value, claves)
+                    if cell.value != texto_anon:
+                        cell.value = texto_anon
     wb.save(obtener_ruta_salida(filepath, output_dir))
+    print(f"[XLSX] Anonimizado: {os.path.basename(filepath)}")
 
-def anonimizar_pdf(filepath, palabras, output_dir):
+
+def anonimizar_pdf(filepath, claves, output_dir):
     doc = fitz.open(filepath)
-    nuevo_doc = fitz.open()
+    patrones = [PATRONES_GENERICOS[c] for c in claves if c in PATRONES_GENERICOS]
+
     for page in doc:
-        texto = page.get_text()
-        texto_anon = anonimizar_texto(texto, palabras)
-        nueva_pagina = nuevo_doc.new_page(width=page.rect.width, height=page.rect.height)
-        nueva_pagina.insert_text((50, 50), texto_anon, fontsize=11)
-    nuevo_doc.save(obtener_ruta_salida(filepath, output_dir))
+        texto_original = page.get_text("text")
 
-def anonimizar_csv(filepath, palabras, output_dir):
-    salida = obtener_ruta_salida(filepath, output_dir)
-    with open(filepath, "r", encoding="utf-8") as f_in, open(salida, "w", encoding="utf-8", newline='') as f_out:
-        reader = csv.reader(f_in)
-        writer = csv.writer(f_out)
-        for row in reader:
-            writer.writerow([anonimizar_texto(c, palabras) for c in row])
+        for patron in patrones:
+            matches = re.finditer(patron, texto_original, flags=re.IGNORECASE)
+            for match in matches:
+                fragmento = match.group()
+                areas = page.search_for(fragmento)
+                for rect in areas:
+                    page.add_redact_annot(rect, fill=(1, 1, 1))
 
-def anonimizar_odt(filepath, palabras, output_dir):
-    odt_doc = odf_load(filepath)
-    texto = ""
-    for elem in odt_doc.getElementsByType(P):
-        texto += elem.firstChild.data if elem.firstChild else ""
-    texto_anon = anonimizar_texto(texto, palabras)
-    salida = obtener_ruta_salida(filepath, output_dir).replace(".odt", ".txt")
-    with open(salida, "w", encoding="utf-8") as f:
-        f.write(texto_anon)
+        if "ELIMINAR_IMAGENES" in claves:
+            for img in page.get_images(full=True):
+                xref = img[0]
+                rects = page.get_image_rects(xref)
+                for rect in rects:
+                    page.add_redact_annot(rect, fill=(1, 1, 1))
+
+        page.apply_redactions()
+
+    doc.save(obtener_ruta_salida(filepath, output_dir))
+    print(f"[PDF] Anonimizado: {os.path.basename(filepath)}")
+
 
 def seleccionar_archivo():
     filepath = filedialog.askopenfilename(filetypes=[
-        ("Documentos soportados", "*.docx *.xlsx *.pdf *.csv *.odt")
+        ("Documentos soportados", "*.docx *.xlsx *.pdf")
     ])
     if not filepath:
         return
@@ -102,28 +126,31 @@ def seleccionar_archivo():
         return
 
     try:
-        palabras = cargar_lista_anonimizables()
+        claves = cargar_claves_anonimizables()
         ext = filepath.lower()
-        if ext.endswith(".docx"):
-            anonimizar_docx(filepath, palabras, output_dir)
-        elif ext.endswith(".xlsx"):
-            anonimizar_xlsx(filepath, palabras, output_dir)
-        elif ext.endswith(".pdf"):
-            anonimizar_pdf(filepath, palabras, output_dir)
-        elif ext.endswith(".csv"):
-            anonimizar_csv(filepath, palabras, output_dir)
-        elif ext.endswith(".odt"):
-            anonimizar_odt(filepath, palabras, output_dir)
 
-        messagebox.showinfo("Éxito", f"Archivo anonimizado guardado correctamente.")
+        if ext.endswith(".docx"):
+            anonimizar_docx(filepath, claves, output_dir)
+        elif ext.endswith(".xlsx"):
+            anonimizar_xlsx(filepath, claves, output_dir)
+        elif ext.endswith(".pdf"):
+            anonimizar_pdf(filepath, claves, output_dir)
+        else:
+            messagebox.showerror("Error", "Tipo de archivo no soportado.")
+            return
+
+        messagebox.showinfo("Éxito", "Archivo anonimizado correctamente.")
 
     except Exception as e:
-        messagebox.showerror("Error", str(e))
+        messagebox.showerror("Error", f"Se produjo un error: {str(e)}")
+
 
 def main():
     root = tk.Tk()
     root.withdraw()
     seleccionar_archivo()
 
+
 if __name__ == "__main__":
     main()
+

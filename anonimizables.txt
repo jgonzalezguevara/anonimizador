@@ -1,11 +1,23 @@
-# Añade aquí nombres, ubicaciones o palabras clave a anonimizar manualmente.
-# Una palabra o frase por línea. No uses comillas.
+# Lista de claves genéricas para anonimización
+# El script usará expresiones regulares asociadas a estas claves
 
-Juan Pérez
-Madrid
-Empresa S.A.
-Calle Falsa 123
-ejemplo@correo.com
-Departamento Legal
-NIF12345678
+EMAIL
+URL
+WEB
+DNI
+NIF
+CIF
+NOMBRE_PERSONA
+DIRECCIÓN
+VALOR_ECONÓMICO
+CÓDIGO_NUTS
+CÓDIGO_CPV
+NUMERO_IDENTIFICACION
+CORREO_ELECTRÓNICO
+VALOR_ESTIMADO
+PERFIL_COMPRADOR
+DIRECCIÓN_PRINCIPAL
+PORTAL_CONTRATACIÓN
+DOMINIO_INSTITUCIONAL
+ELIMINAR_IMAGENES
 
